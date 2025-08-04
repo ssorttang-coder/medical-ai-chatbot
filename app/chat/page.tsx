@@ -62,6 +62,7 @@ export default function ChatPage() {
   const [currentStage, setCurrentStage] = useState('initial')
   const [isClient, setIsClient] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     setIsClient(true)
@@ -74,6 +75,17 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // AI 응답 후 자동 포커스
+  useEffect(() => {
+    if (!isLoading && messages.length > 0 && messages[messages.length - 1].type === 'ai') {
+      // 약간의 지연을 두어 애니메이션이 완료된 후 포커스
+      const timer = setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [isLoading, messages])
 
   const emergencyKeywords = [
     '심한 통증', '의식 상실', '호흡 곤란', '출혈',
@@ -109,14 +121,19 @@ export default function ChatPage() {
       timestamp: new Date()
     }
 
-    console.log('사용자 메시지 추가:', userMessage)
     setMessages(prev => [...prev, userMessage])
     setInputMessage('')
     setIsLoading(true)
 
     try {
-      console.log('API 호출 시작')
-      // 실제 API 호출
+      // 대화 히스토리를 더 정확하게 전송
+      const conversationHistory = messages.map(msg => ({
+        type: msg.type,
+        content: msg.content
+      }))
+
+      console.log('전송할 대화 히스토리:', conversationHistory)
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -124,29 +141,25 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           message: inputMessage,
-          conversationHistory: messages.slice(-10) // 최근 10개 메시지만 전송
+          conversationHistory: conversationHistory
         })
       })
 
-      console.log('API 응답 상태:', response.status)
-
       if (!response.ok) {
-        throw new Error('API 호출 실패')
+        throw new Error('Network response was not ok')
       }
 
       const data = await response.json()
-      console.log('API 응답 데이터:', data)
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
         content: data.response,
         timestamp: new Date(),
-        isEmergency: data.isEmergency,
+        isEmergency: isEmergency(data.response),
         stage: data.stage
       }
 
-      console.log('AI 메시지 추가:', aiMessage)
       setMessages(prev => [...prev, aiMessage])
       
       // 현재 단계 업데이트
@@ -266,11 +279,12 @@ export default function ChatPage() {
           <div className="flex space-x-4">
             <div className="flex-1">
               <textarea
+                ref={inputRef}
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="증상에 대해 자유롭게 말씀해주세요..."
-                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent chat-input"
                 rows={3}
                 disabled={isLoading}
               />
