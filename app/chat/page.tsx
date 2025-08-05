@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, AlertTriangle, Shield, User, Bot, Clock } from 'lucide-react'
+import { Send, AlertTriangle, Shield, User, Bot, Clock, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 
 interface Message {
@@ -48,15 +48,7 @@ const conversationStages: ConversationStage[] = [
 ]
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      type: 'ai',
-      content: '안녕하세요! 어떤 증상으로 오셨나요? 자유롭게 말씀해주세요.',
-      timestamp: new Date(),
-      stage: 'initial'
-    }
-  ])
+  const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentStage, setCurrentStage] = useState('initial')
@@ -64,8 +56,18 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // 컴포넌트 마운트 시 초기화
   useEffect(() => {
     setIsClient(true)
+    
+    // 초기 메시지 설정
+    setMessages([{
+      id: '1',
+      type: 'ai',
+      content: '안녕하세요! 어떤 증상으로 오셨나요? 자유롭게 말씀해주세요.',
+      timestamp: new Date(),
+      stage: 'initial'
+    }])
   }, [])
 
   const scrollToBottom = () => {
@@ -103,6 +105,18 @@ export default function ChatPage() {
     return conversationStages.find(stage => stage.id === currentStage) || conversationStages[0]
   }
 
+  // 대화 초기화 함수
+  const resetConversation = () => {
+    setMessages([{
+      id: '1',
+      type: 'ai',
+      content: '안녕하세요! 어떤 증상으로 오셨나요? 자유롭게 말씀해주세요.',
+      timestamp: new Date(),
+      stage: 'initial'
+    }])
+    setCurrentStage('initial')
+  }
+
   const handleSendMessage = async () => {
     console.log('handleSendMessage 호출됨', { inputMessage, isLoading })
     
@@ -126,8 +140,8 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-      // 대화 히스토리를 더 정확하게 전송 (최근 30개 메시지로 증가)
-      const recentMessages = messages.slice(-30)
+      // 대화 히스토리를 더 정확하게 전송 (최근 100개 메시지로 증가)
+      const recentMessages = messages.slice(-100)
       const conversationHistory = recentMessages.map(msg => ({
         type: msg.type,
         content: msg.content
@@ -204,8 +218,18 @@ export default function ChatPage() {
               <Shield className="h-6 w-6 mr-2" />
               의료 AI 상담
             </Link>
-            <div className="text-sm text-gray-500">
-              AI 상담 서비스
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={resetConversation}
+                className="flex items-center text-gray-500 hover:text-gray-700 text-sm"
+                title="대화 초기화"
+              >
+                <RotateCcw className="h-4 w-4 mr-1" />
+                새로 시작
+              </button>
+              <div className="text-sm text-gray-500">
+                AI 상담 서비스
+              </div>
             </div>
           </div>
         </div>

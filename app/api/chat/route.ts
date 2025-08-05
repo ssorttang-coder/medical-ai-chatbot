@@ -35,6 +35,12 @@ const SYSTEM_PROMPT = `당신은 친근하고 전문적인 의사입니다. 환�
 환자: "어제부터"
 의사: "어제부터 두통이 지속되고 있군요. 두통이 특히 어떤 상황에서 심해지나요?"
 
+📝 대화 히스토리 활용:
+- 이전 대화 내용을 참고하여 중복 질문 방지
+- 이미 수집한 정보를 바탕으로 다음 질문 결정
+- 환자가 언급한 증상들을 종합적으로 고려
+- 대화의 맥락을 유지하면서 자연스럽게 진행
+
 ❌ 피해야 할 것들:
 - 여러 질문을 동시에 하지 않기
 - 이미 답변받은 내용을 다시 질문하지 않기
@@ -50,6 +56,7 @@ const SYSTEM_PROMPT = `당신은 친근하고 전문적인 의사입니다. 환�
 - 간단하고 명확한 하나의 질문만
 - 환자의 답변에 대한 이해와 공감 표현
 - 자연스러운 대화 흐름 유지
+- 이전 대화 내용을 참고하여 적절한 질문 생성
 
 충분한 정보 수집 후 요약:
 📋 **현재 상황 요약**
@@ -91,7 +98,7 @@ function determineConversationStage(history: any[]): string {
   const messageCount = userMessages.length
   
   if (messageCount >= 6) return 'summary'
-  if (messageCount >= 4) return 'detailed_analysis'
+  if (messageCount >= 5) return 'detailed_analysis'
   if (messageCount >= 2) return 'symptom_collection'
   return 'initial'
 }
@@ -180,10 +187,10 @@ export async function POST(request: NextRequest) {
     const conversationStage = determineConversationStage(conversationHistory)
     console.log('대화 단계:', conversationStage)
 
-    // 대화 히스토리 정리 (최근 10개 메시지만 유지)
+    // 대화 히스토리 정리 (최근 30개 메시지로 증가)
     const cleanedHistory = conversationHistory
       .filter((msg: any) => msg.content && msg.content.trim() !== '')
-      .slice(-10)
+      .slice(-30) // 20개에서 30개로 증가
 
     // OpenAI API 호출
     const messages = [
@@ -197,11 +204,11 @@ export async function POST(request: NextRequest) {
 
     console.log('OpenAI API 호출 시작:', { message, conversationStage, messagesCount: messages.length })
 
-    // 토큰 설정
+    // 토큰 설정 - 더 많은 컨텍스트를 위해 증가
     const modelToUse = 'gpt-3.5-turbo-16k'
-    let maxTokens = 800
+    let maxTokens = 1000 // 800에서 1000으로 증가
     if (conversationStage === 'summary') {
-      maxTokens = 1200
+      maxTokens = 1500 // 1200에서 1500으로 증가
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -238,7 +245,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               model: 'gpt-3.5-turbo',
               messages,
-              max_tokens: 800,
+              max_tokens: 1000, // 800에서 1000으로 증가
               temperature: 0.7
             })
           })
