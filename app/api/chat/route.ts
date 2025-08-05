@@ -6,7 +6,7 @@ const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 
 console.log('API 라우트 로드됨, OPENAI_API_KEY:', OPENAI_API_KEY ? '설정됨' : '설정되지 않음')
 
-// 의료 특화 시스템 프롬프트 - 대화 히스토리 기반 지능적 응답
+// 의료 특화 시스템 프롬프트 - 강화된 대화 히스토리 기억 시스템
 const SYSTEM_PROMPT = `당신은 친근하고 전문적인 의사입니다. 환자와 자연스럽게 대화하면서 증상을 체계적으로 파악하고 있습니다.
 
 🎯 핵심 규칙:
@@ -15,7 +15,7 @@ const SYSTEM_PROMPT = `당신은 친근하고 전문적인 의사입니다. 환�
 3. 환자의 이전 답변을 바탕으로 다음 질문을 결정하세요
 4. 중복되지 않는 새로운 정보만 요청하세요
 
-📋 대화 분석 방법:
+📋 대화 히스토리 분석 방법:
 - 이전 대화에서 환자가 이미 말한 증상, 시기, 특징 등을 정확히 파악
 - 아직 답변받지 못한 정보만 질문
 - 환자의 답변 패턴을 분석하여 관련된 추가 정보 요청
@@ -96,22 +96,24 @@ function isEmergency(message: string): boolean {
   )
 }
 
-// 대화 히스토리 분석 함수
+// 대화 히스토리 분석 및 요약 함수
 function analyzeConversationHistory(history: any[]): {
   collectedInfo: any,
   missingInfo: string[],
-  stage: string
+  stage: string,
+  conversationSummary: string
 } {
   const userMessages = history.filter(msg => msg.type === 'user').map(msg => msg.content.toLowerCase())
-  const allText = userMessages.join(' ')
+  const aiMessages = history.filter(msg => msg.type === 'ai').map(msg => msg.content.toLowerCase())
+  const allUserText = userMessages.join(' ')
   
   // 수집된 정보 분석
   const collectedInfo = {
-    mainSymptom: extractMainSymptom(allText),
-    timing: extractTiming(allText),
-    severity: extractSeverity(allText),
-    trigger: extractTrigger(allText),
-    additionalSymptoms: extractAdditionalSymptoms(allText)
+    mainSymptom: extractMainSymptom(allUserText),
+    timing: extractTiming(allUserText),
+    severity: extractSeverity(allUserText),
+    trigger: extractTrigger(allUserText),
+    additionalSymptoms: extractAdditionalSymptoms(allUserText)
   }
   
   // 누락된 정보 식별
@@ -121,6 +123,9 @@ function analyzeConversationHistory(history: any[]): {
   if (!collectedInfo.severity) missingInfo.push('증상 강도')
   if (!collectedInfo.trigger) missingInfo.push('유발 요인')
   if (!collectedInfo.additionalSymptoms) missingInfo.push('추가 증상')
+  
+  // 대화 요약 생성
+  const conversationSummary = generateConversationSummary(history, collectedInfo)
   
   // 대화 단계 결정
   let stage = 'initial'
@@ -132,7 +137,40 @@ function analyzeConversationHistory(history: any[]): {
     stage = 'symptom_collection'
   }
   
-  return { collectedInfo, missingInfo, stage }
+  return { collectedInfo, missingInfo, stage, conversationSummary }
+}
+
+// 대화 요약 생성 함수
+function generateConversationSummary(history: any[], collectedInfo: any): string {
+  const userMessages = history.filter(msg => msg.type === 'user')
+  const aiMessages = history.filter(msg => msg.type === 'ai')
+  
+  let summary = '대화 진행 상황:\n'
+  
+  // 주요 정보 요약
+  if (collectedInfo.mainSymptom) {
+    summary += `- 주요 증상: ${collectedInfo.mainSymptom}\n`
+  }
+  if (collectedInfo.timing) {
+    summary += `- 발생 시기: ${collectedInfo.timing}\n`
+  }
+  if (collectedInfo.severity) {
+    summary += `- 증상 강도: ${collectedInfo.severity}\n`
+  }
+  if (collectedInfo.trigger) {
+    summary += `- 유발 요인: ${collectedInfo.trigger}\n`
+  }
+  if (collectedInfo.additionalSymptoms) {
+    summary += `- 추가 증상: ${collectedInfo.additionalSymptoms}\n`
+  }
+  
+  // 최근 대화 내용
+  if (userMessages.length > 0) {
+    const lastUserMessage = userMessages[userMessages.length - 1].content
+    summary += `- 환자 최근 답변: "${lastUserMessage}"\n`
+  }
+  
+  return summary
 }
 
 // 정보 추출 함수들
@@ -270,17 +308,17 @@ export async function POST(request: NextRequest) {
     if (analysis.stage === 'initial') {
       stageContext = '\n\n현재 첫 번째 상담입니다. 환자의 증상을 자연스럽게 파악하고 구체적인 질문을 하세요. 반드시 한 번에 하나의 질문만 하세요.'
     } else if (analysis.stage === 'symptom_collection') {
-      stageContext = `\n\n증상 수집 단계입니다. 현재까지 수집된 정보: ${JSON.stringify(analysis.collectedInfo)}. 누락된 정보: ${analysis.missingInfo.join(', ')}. 이전 대화에서 이미 답변받은 내용은 다시 질문하지 마세요. 반드시 한 번에 하나의 질문만 하세요.`
+      stageContext = `\n\n증상 수집 단계입니다. ${analysis.conversationSummary} 이전 대화에서 이미 답변받은 내용은 다시 질문하지 마세요. 반드시 한 번에 하나의 질문만 하세요.`
     } else if (analysis.stage === 'detailed_analysis') {
-      stageContext = `\n\n상세 분석 단계입니다. 현재까지 수집된 정보: ${JSON.stringify(analysis.collectedInfo)}. 이전 대화 내용을 참고하여 중복되지 않는 새로운 정보만 요청하세요. 반드시 한 번에 하나의 질문만 하세요.`
+      stageContext = `\n\n상세 분석 단계입니다. ${analysis.conversationSummary} 이전 대화 내용을 참고하여 중복되지 않는 새로운 정보만 요청하세요. 반드시 한 번에 하나의 질문만 하세요.`
     } else {
-      stageContext = '\n\n최종 요약 단계입니다. 수집된 모든 정보를 종합하여 현재 상태, 가능한 원인, 권고사항을 정리하세요.'
+      stageContext = `\n\n최종 요약 단계입니다. ${analysis.conversationSummary} 수집된 모든 정보를 종합하여 현재 상태, 가능한 원인, 권고사항을 정리하세요.`
     }
 
-    // 대화 히스토리 정리
-    const cleanedHistory = conversationHistory.filter((msg: any) => {
-      return msg.content && msg.content.trim() !== ''
-    })
+    // 대화 히스토리 정리 (최근 10개 메시지만 유지)
+    const cleanedHistory = conversationHistory
+      .filter((msg: any) => msg.content && msg.content.trim() !== '')
+      .slice(-10) // 최근 10개 메시지만 유지
 
     // OpenAI API 호출
     const messages = [
@@ -294,15 +332,15 @@ export async function POST(request: NextRequest) {
 
     console.log('OpenAI API 호출 시작:', { message, stage: analysis.stage, messagesCount: messages.length })
 
-    // 더 저렴한 모델 사용 (할당량 문제 해결)
+    // 더 많은 토큰 사용으로 대화 히스토리 처리 개선
     const modelToUse = 'gpt-3.5-turbo-16k'
 
-    // 대화 단계에 따른 토큰 수 조절
-    let maxTokens = 400
+    // 대화 단계에 따른 토큰 수 조절 (더 많은 토큰 사용)
+    let maxTokens = 800
     if (analysis.stage === 'summary') {
-      maxTokens = 600
+      maxTokens = 1000
     } else if (analysis.stage === 'initial') {
-      maxTokens = 300
+      maxTokens = 600
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -339,7 +377,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               model: 'gpt-3.5-turbo',
               messages,
-              max_tokens: 400,
+              max_tokens: 600,
               temperature: 0.7
             })
           })

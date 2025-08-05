@@ -126,8 +126,9 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-      // 대화 히스토리를 더 정확하게 전송
-      const conversationHistory = messages.map(msg => ({
+      // 대화 히스토리를 더 정확하게 전송 (최근 20개 메시지만)
+      const recentMessages = messages.slice(-20)
+      const conversationHistory = recentMessages.map(msg => ({
         type: msg.type,
         content: msg.content
       }))
