@@ -57,6 +57,12 @@ AI: "두통이 언제부터 시작되셨나요?" (중복 질문 - 절대 금지)
 - 응급 상황 시 즉시 119 연락 권고
 - 의료진 상담의 중요성 강조
 
+🎯 대화 히스토리 기억 강화 규칙:
+- 이전 대화에서 환자가 말한 모든 내용을 정확히 기억하세요
+- 이미 답변받은 질문은 절대 다시 하지 마세요
+- 환자의 답변을 바탕으로 다음 질문을 결정하세요
+- 대화 히스토리를 꼼꼼히 확인하고 중복을 방지하세요
+
 답변 형식:
 - 간단하고 명확한 하나의 질문만
 - 이전 대화 내용을 참고한 자연스러운 다음 질문
@@ -164,10 +170,37 @@ function generateConversationSummary(history: any[], collectedInfo: any): string
     summary += `- 추가 증상: ${collectedInfo.additionalSymptoms}\n`
   }
   
-  // 최근 대화 내용
+  // 최근 대화 내용 (더 상세하게)
   if (userMessages.length > 0) {
     const lastUserMessage = userMessages[userMessages.length - 1].content
     summary += `- 환자 최근 답변: "${lastUserMessage}"\n`
+  }
+  
+  // 이전 질문들도 포함
+  if (aiMessages.length > 0) {
+    const recentAIMessages = aiMessages.slice(-3) // 최근 3개 AI 메시지
+    summary += `- 최근 질문들:\n`
+    recentAIMessages.forEach((msg, index) => {
+      summary += `  ${index + 1}. "${msg.content}"\n`
+    })
+  }
+  
+  // 이미 답변받은 정보 강조
+  summary += `\n⚠️ 이미 답변받은 정보 (절대 다시 질문하지 마세요):\n`
+  if (collectedInfo.mainSymptom) {
+    summary += `- 주요 증상: ${collectedInfo.mainSymptom} (이미 답변받음)\n`
+  }
+  if (collectedInfo.timing) {
+    summary += `- 발생 시기: ${collectedInfo.timing} (이미 답변받음)\n`
+  }
+  if (collectedInfo.severity) {
+    summary += `- 증상 강도: ${collectedInfo.severity} (이미 답변받음)\n`
+  }
+  if (collectedInfo.trigger) {
+    summary += `- 유발 요인: ${collectedInfo.trigger} (이미 답변받음)\n`
+  }
+  if (collectedInfo.additionalSymptoms) {
+    summary += `- 추가 증상: ${collectedInfo.additionalSymptoms} (이미 답변받음)\n`
   }
   
   return summary
@@ -315,10 +348,10 @@ export async function POST(request: NextRequest) {
       stageContext = `\n\n최종 요약 단계입니다. ${analysis.conversationSummary} 수집된 모든 정보를 종합하여 현재 상태, 가능한 원인, 권고사항을 정리하세요.`
     }
 
-    // 대화 히스토리 정리 (최근 10개 메시지만 유지)
+    // 대화 히스토리 정리 (최근 15개 메시지만 유지)
     const cleanedHistory = conversationHistory
       .filter((msg: any) => msg.content && msg.content.trim() !== '')
-      .slice(-10) // 최근 10개 메시지만 유지
+      .slice(-15) // 최근 15개 메시지로 증가
 
     // OpenAI API 호출
     const messages = [
@@ -335,12 +368,12 @@ export async function POST(request: NextRequest) {
     // 더 많은 토큰 사용으로 대화 히스토리 처리 개선
     const modelToUse = 'gpt-3.5-turbo-16k'
 
-    // 대화 단계에 따른 토큰 수 조절 (더 많은 토큰 사용)
-    let maxTokens = 800
+    // 대화 단계에 따른 토큰 수 조절 (대폭 확대)
+    let maxTokens = 1500
     if (analysis.stage === 'summary') {
-      maxTokens = 1000
+      maxTokens = 2000
     } else if (analysis.stage === 'initial') {
-      maxTokens = 600
+      maxTokens = 1200
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -377,7 +410,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               model: 'gpt-3.5-turbo',
               messages,
-              max_tokens: 600,
+              max_tokens: 1200,
               temperature: 0.7
             })
           })
