@@ -63,6 +63,12 @@ AI: "두통이 언제부터 시작되셨나요?" (중복 질문 - 절대 금지)
 - 환자의 답변을 바탕으로 다음 질문을 결정하세요
 - 대화 히스토리를 꼼꼼히 확인하고 중복을 방지하세요
 
+🚨 매우 중요한 규칙:
+- 환자가 이미 답변한 내용을 절대 다시 질문하지 마세요
+- 예: 환자가 "목이 아파"라고 했으면, "어디가 아프신가요?"라고 다시 묻지 마세요
+- 예: 환자가 "어제부터"라고 했으면, "언제부터 시작되었나요?"라고 다시 묻지 마세요
+- 예: 환자가 "많이 아파"라고 했으면, "증상의 강도는 어느 정도인가요?"라고 다시 묻지 마세요
+
 답변 형식:
 - 간단하고 명확한 하나의 질문만
 - 이전 대화 내용을 참고한 자연스러운 다음 질문
@@ -296,6 +302,7 @@ export async function POST(request: NextRequest) {
     
     const { message, conversationHistory = [] } = await request.json()
     console.log('요청 데이터:', { message, conversationHistoryLength: conversationHistory.length })
+    console.log('전체 대화 히스토리:', JSON.stringify(conversationHistory, null, 2))
 
     if (!message) {
       console.log('메시지가 없음')
@@ -348,10 +355,12 @@ export async function POST(request: NextRequest) {
       stageContext = `\n\n최종 요약 단계입니다. ${analysis.conversationSummary} 수집된 모든 정보를 종합하여 현재 상태, 가능한 원인, 권고사항을 정리하세요.`
     }
 
-    // 대화 히스토리 정리 (최근 15개 메시지만 유지)
+    // 대화 히스토리 정리 (최근 20개 메시지로 증가)
     const cleanedHistory = conversationHistory
       .filter((msg: any) => msg.content && msg.content.trim() !== '')
-      .slice(-15) // 최근 15개 메시지로 증가
+      .slice(-20) // 최근 20개 메시지로 증가
+
+    console.log('정리된 대화 히스토리:', JSON.stringify(cleanedHistory, null, 2))
 
     // OpenAI API 호출
     const messages = [
@@ -364,6 +373,7 @@ export async function POST(request: NextRequest) {
     ]
 
     console.log('OpenAI API 호출 시작:', { message, stage: analysis.stage, messagesCount: messages.length })
+    console.log('전송할 메시지들:', JSON.stringify(messages, null, 2))
 
     // 더 많은 토큰 사용으로 대화 히스토리 처리 개선
     const modelToUse = 'gpt-3.5-turbo-16k'
